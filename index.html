@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditorias GIGA - Grupo Aço Cearense</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf.js for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        industrial: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e3a8a',
+                            900: '#0f172a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .pdf-item-block {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans min-h-screen flex flex-col">
+
+    <!-- ==================== TELA INICIAL (ROTEADOR) ==================== -->
+    <div id="view-home" class="flex-grow flex flex-col items-center justify-center p-6 fade-in">
+        <div class="max-w-4xl w-full space-y-8 text-center">
+            
+            <div class="space-y-4 mb-12">
+                <div class="w-24 h-24 bg-slate-900 text-blue-400 rounded-3xl flex items-center justify-center mx-auto shadow-xl border-4 border-slate-800">
+                    <i class="fa-solid fa-cogs text-5xl"></i>
+                </div>
+                <h1 class="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight uppercase">
+                    Auditorias do GIGA
+                </h1>
+                <h2 class="text-lg sm:text-xl font-semibold text-slate-600 uppercase tracking-widest">
+                    Pilar de Gestão Autônoma - Grupo Aço Cearense
+                </h2>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+                <button onclick="openApp(1)" class="group bg-white rounded-2xl p-6 shadow-md hover:shadow-2xl transition-all border-b-4 border-blue-600 text-left flex flex-col items-center text-center">
+                    <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-broom"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800">PASSO 1</h3>
+                    <p class="text-sm text-slate-500 mt-2">Limpeza Inicial, Inspeção e Identificação de Anomalias.</p>
+                </button>
+
+                <button onclick="openApp(2)" class="group bg-white rounded-2xl p-6 shadow-md hover:shadow-2xl transition-all border-b-4 border-emerald-600 text-left flex flex-col items-center text-center">
+                    <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800">PASSO 2</h3>
+                    <p class="text-sm text-slate-500 mt-2">Fontes de Sujeira e Locais de Difícil Acesso (FS/LDA).</p>
+                </button>
+
+                <button onclick="openApp(3)" class="group bg-white rounded-2xl p-6 shadow-md hover:shadow-2xl transition-all border-b-4 border-orange-600 text-left flex flex-col items-center text-center">
+                    <div class="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-file-signature"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800">PASSO 3</h3>
+                    <p class="text-sm text-slate-500 mt-2">Padrões Provisórios de Limpeza e Lubrificação.</p>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TELA DA APLICAÇÃO (AUDITORIA/DASHBOARD) ==================== -->
+    <div id="view-app" class="hidden flex-col min-h-screen fade-in">
+        
+        <header id="app-header" class="bg-slate-900 text-white shadow-md sticky top-0 z-50 transition-colors">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div class="flex items-center space-x-3">
+                    <button onclick="closeApp()" class="mr-2 text-slate-400 hover:text-white transition-colors" title="Voltar ao Início">
+                        <i class="fa-solid fa-arrow-left text-xl"></i>
+                    </button>
+                    <div id="app-icon-container" class="bg-slate-800 p-2.5 rounded-lg border flex items-center justify-center">
+                        <i id="app-icon" class="fa-solid fa-industry text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 id="app-title" class="text-xl font-bold tracking-tight">Auditoria GIGA</h1>
+                        <p class="text-xs text-slate-400">PILAR DE GESTÃO AUTÔNOMA</p>
+                    </div>
+                </div>
+                <div class="flex bg-black/20 p-1 rounded-lg border border-white/10">
+                    <button onclick="switchTab('audit')" id="tab-btn-audit" class="px-4 py-2 text-sm font-semibold rounded-md transition-all text-white shadow bg-white/20">
+                        <i class="fa-solid fa-pen-to-square mr-2"></i> Realizar Auditoria
+                    </button>
+                    <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="px-4 py-2 text-sm font-semibold rounded-md transition-all text-white/60 hover:text-white">
+                        <i class="fa-solid fa-chart-pie mr-2"></i> Dashboard
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6">
+
+            <section id="tab-audit" class="space-y-6 fade-in">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 sm:p-6">
+                    <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center border-b pb-2">
+                        <i class="fa-solid fa-circle-info mr-2 opacity-70"></i> Metadados da Auditoria
+                    </h2>
+                    <form id="audit-form" class="space-y-4">
+                        <input type="hidden" id="edit-audit-id" value="">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Nome do Auditor *</label>
+                                <input type="text" id="auditor-name" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:outline-none focus:ring-blue-500" placeholder="Nome completo">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Linha / Área *</label>
+                                <select id="audit-line" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:outline-none focus:ring-blue-500 bg-white">
+                                    <option value="">Selecione a Linha...</option>
+                                    <option value="MT 01">MT 01</option><option value="MT 02">MT 02</option><option value="MT 03">MT 03</option><option value="MT 04">MT 04</option><option value="MT 05">MT 05</option><option value="MT 06">MT 06</option><option value="MT 07">MT 07</option><option value="MT 08">MT 08</option>
+                                    <option value="PF 01">PF 01</option><option value="PF 02">PF 02</option><option value="PF 03">PF 03</option><option value="PF 04">PF 04</option>
+                                    <option value="SL 01">SL 01</option><option value="SL 02">SL 02</option><option value="SL 03">SL 03</option><option value="SL 04">SL 04</option><option value="SL 05">SL 05</option>
+                                    <option value="TR 01">TR 01</option><option value="TR 02">TR 02</option><option value="TR 03">TR 03</option><option value="TR 04">TR 04</option><option value="TR 05">TR 05</option>
+                                    <option value="TL 04">TL 04</option><option value="TL 05">TL 05</option>
+                                    <option value="TF 02">TF 02</option><option value="TF 03">TF 03</option><option value="TF 04">TF 04</option>
+                                    <option value="TRANSVERSAL INOX">TRANSVERSAL INOX</option>
+                                    <option value="SLITTER INOX">SLITTER INOX</option>
+                                    <option value="TELHA 01">TELHA 01</option><option value="TELHA 02">TELHA 02</option><option value="TELHA 03">TELHA 03</option><option value="TELHA 04">TELHA 04</option>
+                                    <option value="LAMBRIL 01">LAMBRIL 01</option><option value="LAMBRIL 02">LAMBRIL 02</option><option value="LAMBRIL 03">LAMBRIL 03</option><option value="LAMBRIL 04">LAMBRIL 04</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Número da Auditoria *</label>
+                                <select id="audit-number" onchange="updateTargetScoreInfo()" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:outline-none focus:ring-blue-500 bg-white">
+                                    <option value="1">1ª Auditoria</option>
+                                    <option value="2">2ª Auditoria</option>
+                                    <option value="3">3ª Auditoria</option>
+                                    <option value="4">4ª Auditoria</option>
+                                    <option value="5">5ª Auditoria</option>
+                                    <option value="6">6ª Auditoria ou mais</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Data e Hora</label>
+                                <input type="text" id="audit-datetime" readonly class="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700">
+                            </div>
+                        </div>
+
+                        <div id="target-info-card" class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-800 flex flex-wrap justify-between items-center gap-2 mt-4">
+                            <div><strong class="font-bold">Alvo de Pontos:</strong> <span id="lbl-target-pts">55</span> pts</div>
+                            <div><strong class="font-bold">Alvo de Rendimento:</strong> <span id="lbl-target-yield">85</span>%</div>
+                            <div class="text-slate-500">Total Geral Máximo: 100 pts</div>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="questionnaire-container" class="space-y-6"></div>
+
+                <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-lg sticky bottom-4 z-40 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div class="flex items-center space-x-6 text-sm">
+                        <div>
+                            <span class="text-slate-500 block text-xs">Pontuação Obtida:</span>
+                            <span id="live-total-score" class="text-2xl font-black text-slate-800">0</span> <span class="text-slate-400">/ 100</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-xs">Rend. Calculado:</span>
+                            <span id="live-yield-score" class="text-2xl font-black text-slate-600">0%</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 w-full sm:w-auto">
+                        <button type="button" id="btn-cancel-edit" onclick="cancelEdit()" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-3 rounded-lg transition-all text-sm">
+                            Cancelar Edição
+                        </button>
+                        <button type="button" onclick="triggerSave()" class="w-full sm:w-auto bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 py-3 rounded-lg shadow transition-all flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span id="btn-save-text">Finalizar e Salvar</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-dashboard" class="hidden space-y-6 fade-in">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900">Dashboard & Histórico</h2>
+                        <p class="text-xs text-slate-500">Acompanhamento de desempenho da base de dados</p>
+                    </div>
+                    <div class="w-full sm:w-72">
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Filtrar por Linha</label>
+                        <select id="dash-filter-line" onchange="renderDashboard()" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:outline-none bg-white">
+                            <option value="ALL">Todas as Linhas</option>
+                            <option value="MT 01">MT 01</option><option value="MT 02">MT 02</option><option value="MT 03">MT 03</option><option value="MT 04">MT 04</option><option value="MT 05">MT 05</option><option value="MT 06">MT 06</option><option value="MT 07">MT 07</option><option value="MT 08">MT 08</option>
+                            <option value="PF 01">PF 01</option><option value="PF 02">PF 02</option><option value="PF 03">PF 03</option><option value="PF 04">PF 04</option>
+                            <option value="SL 01">SL 01</option><option value="SL 02">SL 02</option><option value="SL 03">SL 03</option><option value="SL 04">SL 04</option><option value="SL 05">SL 05</option>
+                            <option value="TR 01">TR 01</option><option value="TR 02">TR 02</option><option value="TR 03">TR 03</option><option value="TR 04">TR 04</option><option value="TR 05">TR 05</option>
+                            <option value="TL 04">TL 04</option><option value="TL 05">TL 05</option>
+                            <option value="TF 02">TF 02</option><option value="TF 03">TF 03</option><option value="TF 04">TF 04</option>
+                            <option value="TRANSVERSAL INOX">TRANSVERSAL INOX</option>
+                            <option value="SLITTER INOX">SLITTER INOX</option>
+                            <option value="TELHA 01">TELHA 01</option><option value="TELHA 02">TELHA 02</option><option value="TELHA 03">TELHA 03</option><option value="TELHA 04">TELHA 04</option>
+                            <option value="LAMBRIL 01">LAMBRIL 01</option><option value="LAMBRIL 02">LAMBRIL 02</option><option value="LAMBRIL 03">LAMBRIL 03</option><option value="LAMBRIL 04">LAMBRIL 04</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <span class="text-xs font-bold uppercase text-slate-500">Realizadas</span>
+                        <h3 id="kpi-total-audits" class="text-2xl font-black text-slate-900 mt-1">0</h3>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <span class="text-xs font-bold uppercase text-slate-500">Média Pontuação</span>
+                        <h3 id="kpi-avg-score" class="text-2xl font-black text-slate-800 mt-1">0 pts</h3>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <span class="text-xs font-bold uppercase text-slate-500">Média Rendimento</span>
+                        <h3 id="kpi-avg-yield" class="text-2xl font-black text-slate-700 mt-1">0%</h3>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <span class="text-xs font-bold uppercase text-slate-500">Taxa Sucesso (≥85%)</span>
+                        <h3 id="kpi-success-rate" class="text-2xl font-black text-emerald-600 mt-1">0%</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 font-bold text-sm text-slate-900 flex justify-between items-center">
+                        <span>Histórico de Auditorias na Nuvem</span>
+                        <span id="table-count" class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">0 registros</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 text-xs uppercase">
+                                    <th class="p-3">Data / Hora</th>
+                                    <th class="p-3">Linha</th>
+                                    <th class="p-3">Auditoria #</th>
+                                    <th class="p-3">Auditor</th>
+                                    <th class="p-3">Pontuação / Alvo</th>
+                                    <th class="p-3">Rendimento</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-table-body" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modais Genéricos -->
+    <div id="audit-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+            <div id="modal-header" class="p-4 bg-slate-900 text-white flex justify-between items-center sticky top-0 z-10">
+                <h3 class="font-bold text-base"><i class="fa-solid fa-file-lines mr-2"></i> Detalhes da Auditoria</h3>
+                <button onclick="closeModal()" class="text-white/60 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="modal-content" class="p-6 space-y-6"></div>
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-between items-center gap-3 sticky bottom-0 z-10">
+                <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+                    <span class="text-xs font-bold uppercase text-slate-500 mr-1"><i class="fa-solid fa-share-nodes mr-1"></i> Compartilhar:</span>
+                    <button onclick="shareWhatsApp()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg text-xs transition-all flex items-center space-x-1.5"><i class="fa-brands fa-whatsapp text-sm"></i><span>WhatsApp</span></button>
+                    <button onclick="sharePDFFile()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg text-xs transition-all flex items-center space-x-1.5"><i class="fa-solid fa-share-nodes text-xs"></i><span>Compartilhar PDF</span></button>
+                    <button onclick="copyTextReport()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-3 py-2 rounded-lg text-xs transition-all flex items-center space-x-1.5"><i class="fa-solid fa-copy text-xs"></i><span>Copiar</span></button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="exportModalPDF()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all flex items-center space-x-2"><i class="fa-solid fa-file-pdf"></i><span>Baixar PDF</span></button>
+                    <button onclick="closeModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm transition-all">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Escolha Câmera -->
+    <div id="img-source-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-xs w-full p-6 shadow-2xl text-center space-y-4">
+            <div class="w-12 h-12 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center mx-auto text-xl">
+                <i class="fa-solid fa-camera-retro"></i>
+            </div>
+            <h3 class="font-bold text-base text-slate-900">Adicionar Evidência</h3>
+            <div class="space-y-2 pt-2">
+                <button onclick="chooseImageSource('camera')" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center space-x-2 shadow transition-all"><i class="fa-solid fa-camera"></i><span>Tirar Foto</span></button>
+                <button onclick="chooseImageSource('gallery')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center space-x-2 border border-slate-300 transition-all"><i class="fa-solid fa-images"></i><span>Escolher da Galeria</span></button>
+                <button onclick="closeImageSourceModal()" class="w-full text-slate-400 hover:text-slate-600 text-xs font-semibold py-1 mt-2">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts e Dados -->
+    <script>
+        // ==========================================
+        // CONFIGURAÇÃO DO SUPABASE (CHAVE ATUALIZADA)
+        // ==========================================
+        const SUPABASE_URL = 'https://fzdiuvtbcfyistnddann.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_McSJpQ5YJWOY9h3zJBH2Gg_JaFI0lda'; 
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const auditData = {
+            1: {
+                title: "PASSO 1",
+                key: "giga_audits_p1",
+                color: "blue",
+                icon: "fa-broom",
+                questions: [
+                    { category: "Geral", items: [
+                        { id: 1, text: "O tabelão segue o padrão e está atualizado", max: 2 },
+                        { id: 2, text: "O nível de OEE está atualizado (com as perdas)", max: 2 },
+                        { id: 3, text: "Existe uma lista com os objetivos a serem conseguidos com a GA e está atualizada", max: 2 },
+                        { id: 4, text: "Existe master plan e está atualizado", max: 2 },
+                        { id: 5, text: "Programa das reuniões e presença durante as reuniões", max: 2 }
+                    ]},
+                    { category: "Metodologia", items: [
+                        { id: 6, text: "O nivel de restauraçao e limpeza da maquina e adequado", max: 8 },
+                        { id: 7, text: "O número de etiquetas emitidas está em acordo com as condições da máquina (Anomalias não identificadas)", max: 8 },
+                        { id: 8, text: "As etiquetas estão sendo preenchidas corretamente", max: 4 },
+                        { id: 9, text: "Existe plano para retirada da etiquetas com responsável e prazo", max: 5 },
+                        { id: 10, text: "O gráfico de follow-up das etiquetas está atualizado", max: 2 },
+                        { id: 11, text: "As fontes de sujeira listada refletem o estado da máquina (área)", max: 6 },
+                        { id: 12, text: "Os locais difíceis de limpar refletem o estado da máquina (área)", max: 6 },
+                        { id: 13, text: "Os padrões de limpeza foram definidos", max: 5 },
+                        { id: 14, text: "As atividades de limpeza definidas no padrão estão sendo executadas", max: 8 },
+                        { id: 15, text: "Os tempos de limpeza estão sendo apontados corretamente", max: 5 },
+                        { id: 16, text: "Kit de limpeza definido, organizado e de fácil acesso", max: 3 }
+                    ]},
+                    { category: "Resultados", items: [
+                        { id: 17, text: "Há exemplos de redução de perdas com a etiquetagem e limpeza constante", max: 8 },
+                        { id: 18, text: "% de etiquetas removidas acima de 80%", max: 8 },
+                        { id: 19, text: "O grupo produziu uma LUP para as novas inspeções e melhorias", max: 3 },
+                        { id: 20, text: "Envolvimento e organizaçao das pessoas no Grupo", max: 5 },
+                        { id: 21, text: "Registro de treinamento nas LUPs criadas pelo grupo", max: 2 },
+                        { id: 22, text: "Treinamento do grupo de trabalho nas ferramentas do passo 1", max: 2 },
+                        { id: 23, text: "Existe plano de ação para resolver os problemas listados na ultima auditoria", max: 2 }
+                    ]}
+                ]
+            },
+            2: {
+                title: "PASSO 2",
+                key: "giga_audits_p2",
+                color: "emerald",
+                icon: "fa-magnifying-glass-chart",
+                questions: [
+                    { category: "Geral", items: [
+                        { id: 1, text: "O tabelão segue o padrão e está atualizado", max: 2 },
+                        { id: 2, text: "O nivel de OEE está atualizado (com as perdas)", max: 2 },
+                        { id: 3, text: "Existe uma lista com os objetivos a serem conseguidos com a GA e está atualizada", max: 2 },
+                        { id: 4, text: "Existe master plan (cronograma) e está atualizado", max: 2 },
+                        { id: 5, text: "Programa das reuniões e presença durante as reuniões", max: 2 }
+                    ]},
+                    { category: "Manutenção Passo 1", items: [
+                        { id: 6, text: "O nível de restauração e limpeza da máquina é adequado", max: 4 },
+                        { id: 7, text: "O sistema de retirada de etiquetas continua sendo mantido", max: 3 },
+                        { id: 8, text: "O sistema de limpeza está sendo mantido", max: 3 }
+                    ]},
+                    { category: "Metodologia", items: [
+                        { id: 9, text: "Existe lista atualizada com as fontes de sujeira dos pontos críticos da máquina, com quantificação das perdas", max: 3 },
+                        { id: 10, text: "Existe análise de todas as fontes de sujeira identificadas (Mín 80% dos casos)", max: 8 },
+                        { id: 11, text: "Existe lista atualizada das áreas de difícil acesso, com quantificação das perdas", max: 3 },
+                        { id: 12, text: "Existe análise de todas as áreas de difícil acesso identificadas (Mín 80% dos casos)", max: 8 },
+                        { id: 13, text: "Existe um plano de ação e é monitorado, para eliminar as fontes de sujeira e áreas de difícil acesso", max: 8 },
+                        { id: 14, text: "Existe padrão de inspeção dos pontos críticos da máquina baseado nas FS, LDA e controles visuais", max: 8 },
+                        { id: 15, text: "Os pontos de inspeção são de fácil leitura e interpretação com uso de controles visuais", max: 4 },
+                        { id: 16, text: "A prática de inspeção utilizando controles visuais foi implantada pelos operadores", max: 8 }
+                    ]},
+                    { category: "Resultados", items: [
+                        { id: 17, text: "Há exemplos de implantação de soluções de fontes de sujeira e áreas difícil acesso, com redução das perdas", max: 8 },
+                        { id: 18, text: "Redução de tempos de limpeza em pelo menos 80%", max: 8 },
+                        { id: 19, text: "O grupo produziu uma LUP para cada nova inspeção", max: 4 },
+                        { id: 20, text: "Envolvimento e organização das pessoas no Grupo", max: 4 },
+                        { id: 21, text: "Registro de treinamento nas LUPs criadas pelo grupo", max: 2 },
+                        { id: 22, text: "Treinamento do grupo de trabalho nas ferramentas do passo 2", max: 2 },
+                        { id: 23, text: "O plano de ação para resolver os problemas listados na ultima auditoria foi implantado?", max: 2 }
+                    ]}
+                ]
+            },
+            3: {
+                title: "PASSO 3",
+                key: "giga_audits_p3",
+                color: "orange",
+                icon: "fa-file-signature",
+                questions: [
+                    { category: "Geral", items: [
+                            { id: 1, text: "O tabelão segue o padrão e está atualizado", max: 2 },
+                            { id: 2, text: "O nível de OEE está atualizado (com as perdas)", max: 2 },
+                            { id: 3, text: "Existe uma lista com os objetivos a serem conseguidos com a GA e está atualizada", max: 2 },
+                            { id: 4, text: "Existe master plan e está atualizado", max: 2 },
+                            { id: 5, text: "Programa das reuniões e presença durante as reuniões", max: 2 }
+                    ]},
+                    { category: "Passos Anteriores", items: [
+                            { id: 6, text: "O nível de limpeza e organização do posto de trabalho se mantém, assim como ferramentas e kit de limpeza", max: 4 },
+                            { id: 7, text: "O sistema de retirada de etiquetas continua sendo mantido", max: 2 },
+                            { id: 8, text: "O sistema de limpeza está sendo mantido", max: 2 },
+                            { id: 9, text: "O sistema de inspeção está sendo mantido", max: 2 }
+                    ]},
+                    { category: "Metodologia", items: [
+                            { id: 10, text: "Foram revisados os pontos de lubrificação no layout e na máquina", max: 8 },
+                            { id: 11, text: "O padrão provisório de lubrificação foi definido", max: 8 },
+                            { id: 12, text: "Foram revisados os lubrificantes e o fluxo de abastecimento da máquina", max: 3 },
+                            { id: 13, text: "Análise com ações implementadas para redução do número de pontos de lubrificação", max: 5 },
+                            { id: 14, text: "Análise com ações implementadas para redução do tempo de lubrificação", max: 5 },
+                            { id: 15, text: "Definição de kit de lubrificação completo. Está disponível, limpo e ordenado", max: 8 },
+                            { id: 16, text: "Os pontos de lubrificação são de fácil acesso e de fácil leitura, com uso de controles visuais", max: 5 },
+                            { id: 17, text: "Foi implantada a lubrificação por parte dos operadores, e está em uso", max: 8 }
+                    ]},
+                    { category: "Resultados", items: [
+                            { id: 18, text: "Há redução nos tempos de lubrificação, desde o início do terceiro passo", max: 5 },
+                            { id: 19, text: "Há elevação do nível de OEE, atingindo a meta esperada", max: 8 },
+                            { id: 20, text: "Registro de treinamento para as LUPs criadas pelo grupo", max: 4 },
+                            { id: 21, text: "O grupo produziu uma LUP para cada novo procedimento de lubrificação e de melhorias", max: 3 },
+                            { id: 22, text: "Envolvimento das pessoas no Grupo", max: 5 },
+                            { id: 23, text: "Treinamento do grupo de trabalho em lubrificação, com transferência de execução para os operadores", max: 3 },
+                            { id: 24, text: "O plano de ação para resolver os problemas listados na última auditoria foi implantado?", max: 2 }
+                    ]}
+                ]
+            }
+        };
+
+        const targetPointsMaps = {
+            1: { 1: 55, 2: 65, 3: 75, 4: 85, 5: 100, 6: 100 },
+            2: { 1: 55, 2: 65, 3: 75, 4: 85, 5: 100, 6: 100 },
+            3: { 1: 55, 2: 65, 3: 75, 4: 85, 5: 100, 6: 100 }
+        };
+
+        let currentPass = 1;
+        let activeImageItemId = null;
+        let currentModalAudit = null;
+        let currentModalPass = 1;
+
+        setInterval(updateDateTime, 1000);
+
+        function updateDateTime() {
+            const el = document.getElementById("audit-datetime");
+            if(el && !document.getElementById("edit-audit-id").value) el.value = new Date().toLocaleString("pt-BR");
+        }
+
+        function openApp(passNumber) {
+            currentPass = passNumber;
+            const config = auditData[currentPass];
+
+            document.getElementById("app-title").innerText = `Auditoria GIGA - ${config.title}`;
+            document.getElementById("app-header").className = `bg-${config.color}-900 text-white shadow-md sticky top-0 z-50 transition-colors border-b-4 border-${config.color}-600`;
+            
+            const iconContainer = document.getElementById("app-icon-container");
+            iconContainer.className = `bg-${config.color}-950 p-2.5 rounded-lg border border-${config.color}-800 flex items-center justify-center`;
+            document.getElementById("app-icon").className = `fa-solid ${config.icon} text-xl text-${config.color}-400`;
+
+            document.getElementById("view-home").classList.add("hidden");
+            document.getElementById("view-app").classList.remove("hidden");
+            document.getElementById("view-app").classList.add("flex");
+
+            renderQuestionnaire();
+            updateTargetScoreInfo();
+            switchTab('audit');
+            renderDashboard();
+        }
+
+        function closeApp() {
+            cancelEdit();
+            document.getElementById("view-app").classList.add("hidden");
+            document.getElementById("view-app").classList.remove("flex");
+            document.getElementById("view-home").classList.remove("hidden");
+        }
+
+        function switchTab(tabName) {
+            const auditSec = document.getElementById("tab-audit");
+            const dashSec = document.getElementById("tab-dashboard");
+            const btnAudit = document.getElementById("tab-btn-audit");
+            const btnDash = document.getElementById("tab-btn-dashboard");
+
+            if (tabName === 'audit') {
+                auditSec.classList.remove("hidden"); dashSec.classList.add("hidden");
+                btnAudit.className = "px-4 py-2 text-sm font-semibold rounded-md transition-all text-white shadow bg-white/20";
+                btnDash.className = "px-4 py-2 text-sm font-semibold rounded-md transition-all text-white/60 hover:text-white bg-transparent";
+            } else {
+                auditSec.classList.add("hidden"); dashSec.classList.remove("hidden");
+                btnDash.className = "px-4 py-2 text-sm font-semibold rounded-md transition-all text-white shadow bg-white/20";
+                btnAudit.className = "px-4 py-2 text-sm font-semibold rounded-md transition-all text-white/60 hover:text-white bg-transparent";
+                renderDashboard();
+            }
+        }
+
+        function renderQuestionnaire() {
+            const container = document.getElementById("questionnaire-container");
+            const color = auditData[currentPass].color;
+            let html = "";
+
+            auditData[currentPass].questions.forEach(group => {
+                html += `
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                        <div class="bg-${color}-50 text-${color}-900 px-5 py-3 font-bold text-sm border-b border-${color}-200">
+                            Categoria: ${group.category}
+                        </div>
+                        <div class="divide-y divide-slate-100">
+                `;
+                group.items.forEach(item => {
+                    html += `
+                        <div class="p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center hover:bg-slate-50">
+                            <div class="flex-grow">
+                                <span class="text-xs font-bold text-${color}-600 block mb-1">Item ${item.id} (Máx: ${item.max} pts)</span>
+                                <p class="text-sm font-medium text-slate-900">${item.text}</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" min="0" max="${item.max}" value="0" id="score-${item.id}" oninput="calcLive();" class="w-20 rounded-xl border border-slate-300 px-3 py-2 text-center font-bold text-base focus:ring-2 focus:ring-${color}-500 outline-none shadow-sm">
+                                    <span class="text-sm text-slate-500 font-medium">/ ${item.max}</span>
+                                </div>
+                                <input type="text" id="obs-${item.id}" placeholder="Observações..." class="w-full sm:w-56 rounded-xl border border-slate-300 px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-${color}-500 shadow-sm">
+                                <button type="button" onclick="openImageModal(${item.id})" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-300 flex items-center space-x-1 shadow-sm">
+                                    <i class="fa-solid fa-camera"></i> <span id="img-lbl-${item.id}">Foto</span>
+                                </button>
+                                <input type="file" accept="image/*" id="cam-${item.id}" capture="environment" class="hidden" onchange="attachImg(${item.id}, this)">
+                                <input type="file" accept="image/*" id="gal-${item.id}" class="hidden" onchange="attachImg(${item.id}, this)">
+                                <input type="hidden" id="img-data-${item.id}">
+                            </div>
+                        </div>`;
+                });
+                html += `</div></div>`;
+            });
+            container.innerHTML = html;
+            calcLive();
+        }
+
+        function calcLive() {
+            let total = 0;
+            auditData[currentPass].questions.forEach(g => {
+                g.items.forEach(i => {
+                    let v = parseInt(document.getElementById(`score-${i.id}`).value) || 0;
+                    if(v > i.max) { v = i.max; document.getElementById(`score-${i.id}`).value = v; }
+                    if(v < 0) { v = 0; document.getElementById(`score-${i.id}`).value = 0; }
+                    total += v;
+                });
+            });
+            const auditNum = document.getElementById("audit-number").value || 1;
+            const target = targetPointsMaps[currentPass][auditNum];
+            
+            const yieldPct = target > 0 ? Math.min(100, Math.round((total / target) * 100)) : 0;
+            
+            document.getElementById("live-total-score").innerText = total;
+            document.getElementById("live-yield-score").innerText = yieldPct + "%";
+            document.getElementById("live-yield-score").className = yieldPct >= 85 ? "text-2xl font-black text-emerald-600" : "text-2xl font-black text-orange-600";
+        }
+
+        function updateTargetScoreInfo() {
+            const auditNum = document.getElementById("audit-number").value;
+            document.getElementById("lbl-target-pts").innerText = targetPointsMaps[currentPass][auditNum];
+            calcLive();
+        }
+
+        function openImageModal(id) { activeImageItemId = id; document.getElementById("img-source-modal").classList.remove("hidden"); }
+        function closeImageSourceModal() { document.getElementById("img-source-modal").classList.add("hidden"); }
+        function chooseImageSource(type) {
+            closeImageSourceModal();
+            document.getElementById(type === 'camera' ? `cam-${activeImageItemId}` : `gal-${activeImageItemId}`).click();
+        }
+
+        function attachImg(id, input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const lbl = document.getElementById(`img-lbl-${id}`);
+                lbl.innerText = "Processando...";
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const maxDim = 800;
+
+                        if (width > height) {
+                            if (width > maxDim) {
+                                height = Math.round((height * maxDim) / width);
+                                width = maxDim;
+                            }
+                        } else {
+                            if (height > maxDim) {
+                                width = Math.round((width * maxDim) / height);
+                                height = maxDim;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                        document.getElementById(`img-data-${id}`).value = compressedBase64;
+                        lbl.innerText = "Anexado ✓";
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function triggerSave() {
+            const auditor = document.getElementById("auditor-name").value;
+            const line = document.getElementById("audit-line").value;
+            if(!auditor || !line) return alert("Preencha Auditor e Linha.");
+
+            let missingObsId = null;
+            auditData[currentPass].questions.forEach(g => {
+                g.items.forEach(i => {
+                    let scoreVal = parseInt(document.getElementById(`score-${i.id}`).value);
+                    let obsVal = document.getElementById(`obs-${i.id}`).value.trim();
+                    if (scoreVal === 0 && !obsVal && missingObsId === null) {
+                        missingObsId = i.id;
+                    }
+                });
+            });
+
+            if (missingObsId !== null) {
+                alert(`O Item ${missingObsId} recebeu nota 0. É obrigatório preencher o campo de observações para justificá-lo.`);
+                const obsInputElem = document.getElementById(`obs-${missingObsId}`);
+                if (obsInputElem) {
+                    obsInputElem.focus();
+                    obsInputElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+
+            document.getElementById("btn-save-text").innerText = "A guardar na nuvem...";
+
+            let total = 0, items = [], catScores = {};
+            auditData[currentPass].questions.forEach(g => {
+                catScores[g.category] = {score: 0, max: 0};
+                g.items.forEach(i => {
+                    let v = parseInt(document.getElementById(`score-${i.id}`).value) || 0;
+                    total += v; catScores[g.category].score += v; catScores[g.category].max += i.max;
+                    items.push({ id: i.id, text: i.text, cat: g.category, max: i.max, score: v, obs: document.getElementById(`obs-${i.id}`).value, img: document.getElementById(`img-data-${i.id}`).value });
+                });
+            });
+
+            const auditNum = document.getElementById("audit-number").value;
+            const target = targetPointsMaps[currentPass][auditNum];
+            const editId = document.getElementById("edit-audit-id").value;
+            const auditDateVal = document.getElementById("audit-datetime").value;
+            const calculatedYield = target > 0 ? Math.min(100, Math.round((total/target)*100)) : 0;
+
+            const payload = {
+                data_auditoria: auditDateVal,
+                auditor: auditor,
+                linha: line,
+                passo: currentPass,
+                num_auditoria: auditNum,
+                alvo_pontos: target,
+                total_pontos: total,
+                rendimento: calculatedYield,
+                respostas: items,
+                pontuacoes_categoria: catScores
+            };
+
+            try {
+                if (editId) {
+                    const { error } = await supabaseClient
+                        .from('auditorias_giga')
+                        .update(payload)
+                        .eq('id', editId);
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabaseClient
+                        .from('auditorias_giga')
+                        .insert([payload]);
+                    if (error) throw error;
+                }
+
+                alert("Auditoria salva com sucesso no banco de dados!");
+                cancelEdit();
+                switchTab('dashboard');
+            } catch (err) {
+                alert("Erro ao salvar no banco de dados: " + err.message);
+                document.getElementById("btn-save-text").innerText = "Finalizar e Salvar";
+            }
+        }
+
+        function cancelEdit() {
+            document.getElementById("edit-audit-id").value = "";
+            document.getElementById("audit-form").reset();
+            updateDateTime();
+            updateTargetScoreInfo();
+            renderQuestionnaire();
+            document.getElementById("btn-save-text").innerText = "Finalizar e Salvar";
+            document.getElementById("btn-cancel-edit").classList.add("hidden");
+        }
+
+        async function renderDashboard() {
+            const filter = document.getElementById("dash-filter-line").value;
+            const tbody = document.getElementById("audit-table-body");
+            tbody.innerHTML = "<tr><td colspan='8' class='text-center p-4 text-slate-400'>Carregando dados da nuvem...</td></tr>";
+
+            let query = supabaseClient
+                .from('auditorias_giga')
+                .select('*')
+                .eq('passo', currentPass)
+                .order('id', { ascending: false });
+
+            if (filter !== "ALL") {
+                query = query.eq('linha', filter);
+            }
+
+            const { data: list, error } = await query;
+
+            if (error) {
+                tbody.innerHTML = "<tr><td colspan='8' class='text-center p-4 text-rose-500'>Erro ao carregar dados do Supabase.</td></tr>";
+                console.error(error);
+                return;
+            }
+
+            window.currentLoadedAudits = list;
+
+            document.getElementById("kpi-total-audits").innerText = list.length;
+            document.getElementById("table-count").innerText = `${list.length} registro${list.length === 1 ? '' : 's'}`;
+            
+            let tPts = 0, tY = 0, suc = 0;
+            list.forEach(a => { 
+                tPts += a.total_pontos; 
+                tY += parseFloat(a.rendimento); 
+                if(a.rendimento >= 85) suc++; 
+            });
+            
+            document.getElementById("kpi-avg-score").innerText = list.length ? (tPts/list.length).toFixed(1) + " pts" : "0 pts";
+            document.getElementById("kpi-avg-yield").innerText = list.length ? Math.round(tY/list.length) + "%" : "0%";
+            document.getElementById("kpi-success-rate").innerText = list.length ? Math.round((suc/list.length)*100) + "%" : "0%";
+            
+            let html = "";
+            list.forEach(a => {
+                html += `<tr class="border-b">
+                    <td class="p-3 text-xs">${a.data_auditoria}</td>
+                    <td class="p-3 font-bold">${a.linha}</td>
+                    <td class="p-3">${a.num_auditoria}ª</td>
+                    <td class="p-3 text-xs">${a.auditor}</td>
+                    <td class="p-3 font-bold">${a.total_pontos} <span class="text-xs font-normal text-slate-500">/ Alvo: ${a.alvo_pontos}</span></td>
+                    <td class="p-3 font-bold text-${a.rendimento>=85?'emerald':'orange'}-600">${a.rendimento}%</td>
+                    <td class="p-3"><span class="px-2 py-1 rounded text-xs text-white ${a.rendimento>=85?'bg-emerald-500':'bg-rose-500'}">${a.rendimento>=85?'Atingido':'Não atingido'}</span></td>
+                    <td class="p-3 text-right">
+                        <button onclick="viewAudit(${a.id})" class="bg-slate-200 px-2 py-1 rounded mr-1" title="Visualizar"><i class="fa-solid fa-eye"></i></button>
+                        <button onclick="delAudit(${a.id})" class="bg-rose-200 text-rose-700 px-2 py-1 rounded" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html || "<tr><td colspan='8' class='text-center p-4 text-slate-400'>Nenhum registro encontrado.</td></tr>";
+        }
+
+        function viewAudit(id) {
+            const found = (window.currentLoadedAudits || []).find(a => a.id === id);
+            if (!found) return;
+            
+            currentModalAudit = {
+                id: found.id, date: found.data_auditoria, auditor: found.auditor,
+                line: found.linha, num: found.num_auditoria, target: found.alvo_pontos,
+                total: found.total_pontos, yield: found.rendimento, items: found.respostas,
+                catScores: found.pontuacoes_categoria
+            };
+            currentModalPass = found.passo;
+            
+            const a = currentModalAudit;
+            const passConfig = auditData[currentModalPass];
+            const c = passConfig.color;
+            const isSuccess = a.yield >= 85;
+
+            let html = `<div id="pdf-report" class="p-6 bg-white text-sm max-w-[700px] mx-auto space-y-6">
+                <div class="border-b-2 border-${c}-500 pb-3 flex justify-between items-center pdf-item-block">
+                    <div>
+                        <h2 class="font-bold text-xl uppercase">Auditoria ${passConfig.title} - GIGA</h2>
+                        <p class="text-blue-600 font-bold text-sm mt-0.5">Linha: ${a.line} | Auditoria: ${a.num}ª</p>
+                    </div>
+                    <div class="text-right text-xs text-slate-500">
+                        <p>Data: ${a.date}</p>
+                        <p>Auditor: ${a.auditor}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-center pdf-item-block">
+                    <div>
+                        <span class="text-xs font-bold uppercase text-slate-500 block">Pontuação Obtida</span>
+                        <span class="text-lg font-black text-slate-900">${a.total} / 100</span>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold uppercase text-slate-500 block">Alvo (${a.num}ª Aud.)</span>
+                        <span class="text-lg font-black text-slate-900">${a.target} pts</span>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold uppercase text-slate-500 block">Rend. Alcançado</span>
+                        <span class="text-lg font-black ${isSuccess ? 'text-emerald-600' : 'text-blue-600'}">${a.yield}%</span>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold uppercase text-slate-500 block">Status do Alvo</span>
+                        <span class="text-xs font-black ${isSuccess ? 'text-emerald-600' : 'text-rose-600'} block mt-1">${isSuccess ? 'ATINGIDO' : 'NÃO ATINGIDO'}</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-100 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 italic pdf-item-block">
+                    Rendimento = pontuação obtida ÷ alvo da auditoria. Rendimento alvo de referência: 85%.
+                </div>
+
+                <div class="space-y-3 pdf-item-block">
+                    <h3 class="font-bold text-xs uppercase text-slate-700 tracking-wider border-b pb-1">Pontuação por Categoria</h3>`;
+
+            for (let cat in a.catScores) {
+                const dataCat = a.catScores[cat];
+                const pctCat = dataCat.max > 0 ? Math.round((dataCat.score / dataCat.max) * 100) : 0;
+                html += `
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs font-bold text-slate-800">
+                            <span>${cat}</span>
+                            <span>${dataCat.score} / ${dataCat.max} pts (${pctCat}%)</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                            <div class="bg-blue-600 h-2.5 rounded-full transition-all" style="width: ${pctCat}%"></div>
+                        </div>
+                    </div>`;
+            }
+
+            html += `</div>
+                <div class="space-y-6 pt-2">
+                    <h3 class="font-bold text-xs uppercase text-slate-700 tracking-wider border-b pb-1">Itens Avaliados por Categoria</h3>`;
+
+            let itemsByCategory = {};
+            a.items.forEach(i => {
+                if (!itemsByCategory[i.cat]) itemsByCategory[i.cat] = [];
+                itemsByCategory[i.cat].push(i);
+            });
+
+            for (let catName in itemsByCategory) {
+                html += `
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden pdf-item-block">
+                        <div class="bg-slate-200 px-4 py-2 font-bold text-xs text-slate-800 uppercase border-b border-slate-300">
+                            ${catName}
+                        </div>
+                        <div class="divide-y divide-slate-200">`;
+
+                itemsByCategory[catName].forEach(i => {
+                    let scoreBadgeClass = "bg-amber-100 text-amber-800 border-amber-300";
+                    if (i.score === 0) scoreBadgeClass = "bg-rose-100 text-rose-800 border-rose-300";
+                    else if (i.score === i.max) scoreBadgeClass = "bg-emerald-100 text-emerald-800 border-emerald-300";
+
+                    html += `
+                        <div class="p-3 space-y-1">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="font-medium text-slate-900 w-4/5">${i.id}. ${i.text}</span>
+                                <span class="px-2.5 py-1 rounded-full font-bold border ${scoreBadgeClass}">
+                                    ${i.score} / ${i.max} pts
+                                </span>
+                            </div>
+                            ${i.obs ? `<p class="text-xs text-slate-500 italic mt-1">Obs: ${i.obs}</p>` : ''}
+                            ${i.img ? `<img src="${i.img}" class="h-20 mt-2 rounded border">` : ''}
+                        </div>`;
+                });
+                html += `</div></div>`;
+            }
+            html += `</div></div>`;
+
+            document.getElementById("modal-content").innerHTML = html;
+            document.getElementById("modal-header").className = `p-4 bg-${c}-900 text-white flex justify-between items-center sticky top-0 z-10`;
+            document.getElementById("audit-modal").classList.remove("hidden");
+        }
+
+        function closeModal() { document.getElementById("audit-modal").classList.add("hidden"); }
+        
+        async function delAudit(id) {
+            if(confirm("Tem certeza que deseja excluir esta auditoria do banco de dados?")) {
+                const { error } = await supabaseClient
+                    .from('auditorias_giga')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) {
+                    alert("Erro ao excluir do banco de dados: " + error.message);
+                } else {
+                    renderDashboard();
+                }
+            }
+        }
+
+        function getPdfFilename() {
+            if (!currentModalAudit) return "Auditoria.pdf";
+            const lineFormatted = currentModalAudit.line.replace(/\s+/g, '_');
+            return `Auditoria_Passo_${currentModalPass}_${lineFormatted}_${currentModalAudit.num}ª.pdf`;
+        }
+
+        function exportModalPDF() {
+            const element = document.getElementById("pdf-report");
+            html2pdf().from(element).set({
+                margin: [5, 5, 5, 5], 
+                filename: getPdfFilename(), 
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).save();
+        }
+
+        async function sharePDFFile() {
+            if(!currentModalAudit) return;
+            const element = document.getElementById("pdf-report");
+            const filename = getPdfFilename();
+
+            try {
+                const worker = html2pdf().from(element).set({
+                    margin: [5, 5, 5, 5], 
+                    filename: filename, 
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                });
+
+                const pdfBlob = await worker.outputPdf('blob');
+                const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    const isSuccess = currentModalAudit.yield >= 85;
+                    const statusText = isSuccess ? 'Atendido' : 'Não atendido';
+                    const dataApenas = currentModalAudit.date.split(' ')[0];
+
+                    await navigator.share({
+                        title: `Relatório - Auditoria ${currentModalAudit.line} - Passo ${currentModalPass}`,
+                        text: `Segue em anexo o relatório da auditoria de passo ${currentModalPass} realizada na linha ${currentModalAudit.line} no dia ${dataApenas}.\nResultado: ${currentModalAudit.total} pontos\nPontuação alvo: ${currentModalAudit.target} pontos\nRendimento: ${currentModalAudit.yield}%\nStatus: ${statusText}`,
+                        files: [file]
+                    });
+                } else {
+                    exportModalPDF();
+                    alert("Seu navegador não suporta compartilhamento direto de arquivos. O PDF foi baixado normalmente.");
+                }
+            } catch (error) {
+                exportModalPDF();
+            }
+        }
+
+        function generateText() {
+            const a = currentModalAudit;
+            const passTitle = auditData[currentModalPass].title;
+            const isSuccess = a.yield >= 85;
+            
+            let statusText = isSuccess ? `ATINGIDO (≥ 85%) ✅` : `NÃO ATINGIDO (< 85%) ❌`;
+
+            let text = `📊 *RELATÓRIO DE AUDITORIA GIGA - ${passTitle}*\n\n`;
+            text += `🏭 *Linha/Área:* ${a.line}\n`;
+            text += `🔢 *Auditoria:* ${a.num}ª Auditoria\n`;
+            text += `👤 *Auditor:* ${a.auditor}\n`;
+            text += `📅 *Data:* ${a.date}\n\n`;
+            text += `⭐ *Pontuação:* ${a.total} pts (Alvo: ${a.target} pts)\n`;
+            text += `📈 *Rendimento:* ${a.yield}%\n`;
+            text += `🎯 *Status:* ${statusText}\n\n`;
+            text += `📋 *Por Categoria:*\n`;
+
+            for (let cat in a.catScores) {
+                const dataCat = a.catScores[cat];
+                const pctCat = dataCat.max > 0 ? Math.round((dataCat.score / dataCat.max) * 100) : 0;
+                text += `- ${cat}: ${dataCat.score}/${dataCat.max} pts (${pctCat}%)\n`;
+            }
+
+            return text.trim();
+        }
+
+        function shareWhatsApp() { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(generateText())}`); }
+        
+        function copyTextReport() {
+            const text = generateText();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => { alert("Relatório copiado com sucesso!"); })
+                .catch(() => { fallbackCopyText(text); });
+            } else { fallbackCopyText(text); }
+        }
+
+        function fallbackCopyText(text) {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                if (document.execCommand('copy')) alert("Relatório copiado com sucesso!");
+                else alert("Não foi possível copiar automaticamente. Selecione e copie manualmente.");
+            } catch (err) { alert("Erro ao tentar copiar o texto."); }
+            document.body.removeChild(textarea);
+        }
+    </script>
+</body>
+</html>
