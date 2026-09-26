@@ -252,7 +252,7 @@
 
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div class="p-4 border-b border-slate-200 font-bold text-sm text-slate-900 flex justify-between items-center">
-                        <span>Histórico de Auditorias na Nuvem</span>
+                        <span>Histórico de Auditorias</span>
                         <span id="table-count" class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">0 registros</span>
                     </div>
                     <div class="overflow-x-auto">
@@ -318,7 +318,7 @@
     <!-- Scripts e Dados -->
     <script>
         // ==========================================
-        // CONFIGURAÇÃO DO SUPABASE (CHAVE ATUALIZADA)
+        // CONFIGURAÇÃO DO SUPABASE
         // ==========================================
         const SUPABASE_URL = 'https://fzdiuvtbcfyistnddann.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_McSJpQ5YJWOY9h3zJBH2Gg_JaFI0lda'; 
@@ -453,6 +453,46 @@
         let activeImageItemId = null;
         let currentModalAudit = null;
         let currentModalPass = 1;
+
+        // ==========================================
+        // LÓGICA DE SINCRONIZAÇÃO OFFLINE
+        // ==========================================
+        async function syncOfflineAudits() {
+            if (!navigator.onLine) return; // Só tenta se tiver internet
+            
+            let offlineList = JSON.parse(localStorage.getItem('giga_offline_audits') || '[]');
+            if (offlineList.length === 0) return;
+
+            let remaining = [];
+            let syncedCount = 0;
+
+            for (let audit of offlineList) {
+                let tempPayload = { ...audit };
+                delete tempPayload.id; // Remove o ID temporário do modo offline
+
+                try {
+                    const { error } = await supabaseClient.from('auditorias_giga').insert([tempPayload]);
+                    if (error) throw error;
+                    syncedCount++;
+                } catch (e) {
+                    remaining.push(audit); // Se falhar, mantém na lista para tentar depois
+                }
+            }
+
+            localStorage.setItem('giga_offline_audits', JSON.stringify(remaining));
+            
+            if (syncedCount > 0) {
+                if (!document.getElementById('tab-dashboard').classList.contains('hidden')) {
+                    renderDashboard(); // Atualiza a tela se o usuário estiver no Dashboard
+                }
+                alert(`${syncedCount} auditoria(s) salva(s) offline foram sincronizada(s) com a nuvem!`);
+            }
+        }
+
+        // Tenta sincronizar sempre que a conexão voltar ou o app for aberto
+        window.addEventListener('online', syncOfflineAudits);
+        window.addEventListener('load', syncOfflineAudits);
+
 
         setInterval(updateDateTime, 1000);
 
@@ -649,7 +689,7 @@
                 return;
             }
 
-            document.getElementById("btn-save-text").innerText = "A guardar na nuvem...";
+            document.getElementById("btn-save-text").innerText = "A guardar...";
 
             let total = 0, items = [], catScores = {};
             auditData[currentPass].questions.forEach(g => {
@@ -680,26 +720,41 @@
                 pontuacoes_categoria: catScores
             };
 
+            const saveOffline = () => {
+                let offlineList = JSON.parse(localStorage.getItem('giga_offline_audits') || '[]');
+                payload.id = 'offline_' + Date.now();
+                offlineList.push(payload);
+                localStorage.setItem('giga_offline_audits', JSON.stringify(offlineList));
+                alert("Sem conexão de internet no momento. A auditoria foi salva no modo OFFLINE no dispositivo e será enviada automaticamente quando a internet voltar.");
+                cancelEdit();
+                switchTab('dashboard');
+            };
+
             try {
                 if (editId) {
-                    const { error } = await supabaseClient
-                        .from('auditorias_giga')
-                        .update(payload)
-                        .eq('id', editId);
+                    // Impede editar registros da nuvem se estiver offline para evitar conflitos
+                    if (!navigator.onLine) throw new Error('OFFLINE_EDIT_ERROR');
+                    const { error } = await supabaseClient.from('auditorias_giga').update(payload).eq('id', editId);
                     if (error) throw error;
+                    alert("Auditoria atualizada com sucesso na nuvem!");
                 } else {
-                    const { error } = await supabaseClient
-                        .from('auditorias_giga')
-                        .insert([payload]);
+                    if (!navigator.onLine) throw new Error('Failed to fetch'); // Força fluxo offline
+                    const { error } = await supabaseClient.from('auditorias_giga').insert([payload]);
                     if (error) throw error;
+                    alert("Auditoria salva com sucesso no banco de dados!");
                 }
-
-                alert("Auditoria salva com sucesso no banco de dados!");
                 cancelEdit();
                 switchTab('dashboard');
             } catch (err) {
-                alert("Erro ao salvar no banco de dados: " + err.message);
-                document.getElementById("btn-save-text").innerText = "Finalizar e Salvar";
+                if (!editId && (err.message === 'Failed to fetch' || err.message.includes('fetch') || !navigator.onLine)) {
+                    saveOffline(); // Cai no fluxo offline para novas auditorias
+                } else if (editId && (!navigator.onLine || err.message.includes('fetch') || err.message === 'OFFLINE_EDIT_ERROR')) {
+                    alert("Você está sem conexão para atualizar uma auditoria já existente na nuvem. Aguarde a internet voltar para editar.");
+                    document.getElementById("btn-save-text").innerText = "Atualizar Auditoria";
+                } else {
+                    alert("Erro ao salvar no banco de dados: " + err.message);
+                    document.getElementById("btn-save-text").innerText = "Finalizar e Salvar";
+                }
             }
         }
 
@@ -716,55 +771,67 @@
         async function renderDashboard() {
             const filter = document.getElementById("dash-filter-line").value;
             const tbody = document.getElementById("audit-table-body");
-            tbody.innerHTML = "<tr><td colspan='8' class='text-center p-4 text-slate-400'>Carregando dados da nuvem...</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='8' class='text-center p-4 text-slate-400'>A processar dados...</td></tr>";
 
-            let query = supabaseClient
-                .from('auditorias_giga')
-                .select('*')
-                .eq('passo', currentPass)
-                .order('id', { ascending: false });
+            // 1. Busca os pendentes offline locais
+            let offlineList = JSON.parse(localStorage.getItem('giga_offline_audits') || '[]');
+            offlineList = offlineList.filter(a => a.passo === currentPass);
+            if (filter !== "ALL") offlineList = offlineList.filter(a => a.linha === filter);
 
-            if (filter !== "ALL") {
-                query = query.eq('linha', filter);
+            // 2. Busca os da nuvem
+            let cloudList = [];
+            if (navigator.onLine) {
+                let query = supabaseClient
+                    .from('auditorias_giga')
+                    .select('*')
+                    .eq('passo', currentPass)
+                    .order('id', { ascending: false });
+
+                if (filter !== "ALL") query = query.eq('linha', filter);
+                
+                const { data, error } = await query;
+                if (!error && data) cloudList = data;
             }
 
-            const { data: list, error } = await query;
+            // 3. Junta as duas listas
+            const combinedList = [...offlineList, ...cloudList];
+            window.currentLoadedAudits = combinedList;
 
-            if (error) {
-                tbody.innerHTML = "<tr><td colspan='8' class='text-center p-4 text-rose-500'>Erro ao carregar dados do Supabase.</td></tr>";
-                console.error(error);
-                return;
-            }
-
-            window.currentLoadedAudits = list;
-
-            document.getElementById("kpi-total-audits").innerText = list.length;
-            document.getElementById("table-count").innerText = `${list.length} registro${list.length === 1 ? '' : 's'}`;
+            document.getElementById("kpi-total-audits").innerText = combinedList.length;
+            document.getElementById("table-count").innerText = `${combinedList.length} registro${combinedList.length === 1 ? '' : 's'}`;
             
             let tPts = 0, tY = 0, suc = 0;
-            list.forEach(a => { 
+            combinedList.forEach(a => { 
                 tPts += a.total_pontos; 
                 tY += parseFloat(a.rendimento); 
                 if(a.rendimento >= 85) suc++; 
             });
             
-            document.getElementById("kpi-avg-score").innerText = list.length ? (tPts/list.length).toFixed(1) + " pts" : "0 pts";
-            document.getElementById("kpi-avg-yield").innerText = list.length ? Math.round(tY/list.length) + "%" : "0%";
-            document.getElementById("kpi-success-rate").innerText = list.length ? Math.round((suc/list.length)*100) + "%" : "0%";
+            document.getElementById("kpi-avg-score").innerText = combinedList.length ? (tPts/combinedList.length).toFixed(1) + " pts" : "0 pts";
+            document.getElementById("kpi-avg-yield").innerText = combinedList.length ? Math.round(tY/combinedList.length) + "%" : "0%";
+            document.getElementById("kpi-success-rate").innerText = combinedList.length ? Math.round((suc/combinedList.length)*100) + "%" : "0%";
             
             let html = "";
-            list.forEach(a => {
-                html += `<tr class="border-b">
+            combinedList.forEach(a => {
+                const isOffline = String(a.id).startsWith('offline_');
+                const rowStyle = isOffline ? 'bg-amber-50' : '';
+                
+                // Botão de visualização adaptado
+                const statusBadge = isOffline 
+                    ? `<span class="px-2 py-1 rounded text-xs text-white bg-amber-500" title="Aguardando conexão para envio"><i class="fa-solid fa-wifi"></i> Pendente</span>`
+                    : `<span class="px-2 py-1 rounded text-xs text-white ${a.rendimento>=85?'bg-emerald-500':'bg-rose-500'}">${a.rendimento>=85?'Atingido':'Não atingido'}</span>`;
+
+                html += `<tr class="border-b ${rowStyle}">
                     <td class="p-3 text-xs">${a.data_auditoria}</td>
                     <td class="p-3 font-bold">${a.linha}</td>
                     <td class="p-3">${a.num_auditoria}ª</td>
                     <td class="p-3 text-xs">${a.auditor}</td>
                     <td class="p-3 font-bold">${a.total_pontos} <span class="text-xs font-normal text-slate-500">/ Alvo: ${a.alvo_pontos}</span></td>
                     <td class="p-3 font-bold text-${a.rendimento>=85?'emerald':'orange'}-600">${a.rendimento}%</td>
-                    <td class="p-3"><span class="px-2 py-1 rounded text-xs text-white ${a.rendimento>=85?'bg-emerald-500':'bg-rose-500'}">${a.rendimento>=85?'Atingido':'Não atingido'}</span></td>
+                    <td class="p-3">${statusBadge}</td>
                     <td class="p-3 text-right">
-                        <button onclick="viewAudit(${a.id})" class="bg-slate-200 px-2 py-1 rounded mr-1" title="Visualizar"><i class="fa-solid fa-eye"></i></button>
-                        <button onclick="delAudit(${a.id})" class="bg-rose-200 text-rose-700 px-2 py-1 rounded" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="viewAudit('${a.id}')" class="bg-slate-200 px-2 py-1 rounded mr-1" title="Visualizar"><i class="fa-solid fa-eye"></i></button>
+                        <button onclick="delAudit('${a.id}')" class="bg-rose-200 text-rose-700 px-2 py-1 rounded" title="Excluir"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>`;
             });
@@ -772,7 +839,7 @@
         }
 
         function viewAudit(id) {
-            const found = (window.currentLoadedAudits || []).find(a => a.id === id);
+            const found = (window.currentLoadedAudits || []).find(a => String(a.id) === String(id));
             if (!found) return;
             
             currentModalAudit = {
@@ -787,8 +854,10 @@
             const passConfig = auditData[currentModalPass];
             const c = passConfig.color;
             const isSuccess = a.yield >= 85;
+            const isOffline = String(a.id).startsWith('offline_');
 
             let html = `<div id="pdf-report" class="p-6 bg-white text-sm max-w-[700px] mx-auto space-y-6">
+                ${isOffline ? `<div class="bg-amber-100 text-amber-800 text-xs font-bold p-2 text-center rounded-lg mb-2"><i class="fa-solid fa-wifi mr-1"></i> Esta auditoria está salva offline e aguarda conexão para ir à nuvem.</div>` : ''}
                 <div class="border-b-2 border-${c}-500 pb-3 flex justify-between items-center pdf-item-block">
                     <div>
                         <h2 class="font-bold text-xl uppercase">Auditoria ${passConfig.title} - GIGA</h2>
@@ -889,15 +958,20 @@
         
         async function delAudit(id) {
             if(confirm("Tem certeza que deseja excluir esta auditoria do banco de dados?")) {
-                const { error } = await supabaseClient
-                    .from('auditorias_giga')
-                    .delete()
-                    .eq('id', id);
-
-                if (error) {
-                    alert("Erro ao excluir do banco de dados: " + error.message);
-                } else {
+                if (String(id).startsWith('offline_')) {
+                    // Remove localmente se for offline
+                    let offlineList = JSON.parse(localStorage.getItem('giga_offline_audits') || '[]');
+                    offlineList = offlineList.filter(a => a.id !== id);
+                    localStorage.setItem('giga_offline_audits', JSON.stringify(offlineList));
                     renderDashboard();
+                } else {
+                    // Remove do Supabase
+                    const { error } = await supabaseClient.from('auditorias_giga').delete().eq('id', id);
+                    if (error) {
+                        alert("Erro ao excluir do banco de dados: " + error.message);
+                    } else {
+                        renderDashboard();
+                    }
                 }
             }
         }
