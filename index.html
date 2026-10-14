@@ -724,7 +724,7 @@
                 payload.id = 'offline_' + Date.now();
                 offlineList.push(payload);
                 localStorage.setItem('giga_offline_audits', JSON.stringify(offlineList));
-                alert("Sem conexão de internet no momento. A auditoria foi salva no modo OFFLINE no dispositivo e será enviada automaticamente quando a internet voltar.");
+                alert("Não foi possível conectar ao banco de dados no momento (sem internet ou servidor inativo). A auditoria foi salva no modo OFFLINE no dispositivo e será enviada automaticamente quando a conexão for restabelecida.");
                 cancelEdit();
                 switchTab('dashboard');
             };
@@ -740,29 +740,31 @@
                             localStorage.setItem('giga_offline_audits', JSON.stringify(offlineList));
                         }
                         alert("Auditoria offline atualizada com sucesso!");
+                        cancelEdit();
+                        switchTab('dashboard');
                     } else {
                         if (!navigator.onLine) throw new Error('OFFLINE_EDIT_ERROR');
                         const { error } = await supabaseClient.from('auditorias_giga').update(payload).eq('id', editId);
                         if (error) throw error;
                         alert("Auditoria atualizada com sucesso na nuvem!");
+                        cancelEdit();
+                        switchTab('dashboard');
                     }
                 } else {
-                    if (!navigator.onLine) throw new Error('Failed to fetch'); 
+                    if (!navigator.onLine) throw new Error('OFFLINE'); 
                     const { error } = await supabaseClient.from('auditorias_giga').insert([payload]);
                     if (error) throw error;
                     alert("Auditoria salva com sucesso no banco de dados!");
+                    cancelEdit();
+                    switchTab('dashboard');
                 }
-                cancelEdit();
-                switchTab('dashboard');
             } catch (err) {
-                if (!editId && (err.message === 'Failed to fetch' || err.message.includes('fetch') || !navigator.onLine)) {
+                if (!editId) {
+                    // Novo comportamento: Ativa salvamento offline para QUALQUER erro ao tentar salvar pela primeira vez
                     saveOffline(); 
-                } else if (editId && (!navigator.onLine || err.message.includes('fetch') || err.message === 'OFFLINE_EDIT_ERROR')) {
-                    alert("Você está sem conexão para atualizar uma auditoria já existente na nuvem. Aguarde a internet voltar para editar.");
-                    document.getElementById("btn-save-text").innerText = "Atualizar Auditoria";
                 } else {
-                    alert("Erro ao salvar no banco de dados: " + err.message);
-                    document.getElementById("btn-save-text").innerText = "Finalizar e Salvar";
+                    alert("Não foi possível atualizar a auditoria na nuvem no momento. Servidor indisponível ou sem internet. Tente novamente mais tarde.\\nDetalhe: " + err.message);
+                    document.getElementById("btn-save-text").innerText = "Atualizar Auditoria";
                 }
             }
         }
