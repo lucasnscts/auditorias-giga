@@ -1,0 +1,18 @@
+name: Manter Supabase Ativo
+
+on:
+  schedule:
+    # Roda automaticamente a cada 3 dias às 10:00 da manhã (UTC)
+    - cron: '0 10 */3 * *'
+  workflow_dispatch:
+    # Este comando permite que você rode o robô manualmente quando quiser testar
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fazer consulta na API do Supabase
+        run: |
+          curl --request GET 'https://fzdiuvtbcfyistnddann.supabase.co/rest/v1/auditorias_giga?select=id&limit=1' \
+          --header 'apikey: sb_publishable_McSJpQ5YJWOY9h3zJBH2Gg_JaFI0lda' \
+          --header 'Authorization: Bearer sb_publishable_McSJpQ5YJWOY9h3zJBH2Gg_JaFI0lda'
