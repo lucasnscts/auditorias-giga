@@ -24,8 +24,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- html2pdf.js for PDF Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <!-- Supabase JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- FIREBASE SDKS (Substituindo o Supabase) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -318,11 +321,20 @@
     <!-- Scripts e Dados -->
     <script>
         // ==========================================
-        // CONFIGURAÇÃO DO SUPABASE
+        // CONFIGURAÇÃO DO FIREBASE
         // ==========================================
-        const SUPABASE_URL = 'https://fzdiuvtbcfyistnddann.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_McSJpQ5YJWOY9h3zJBH2Gg_JaFI0lda'; 
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const firebaseConfig = {
+            apiKey: "AIzaSyDdczFH9ulFnkXRpaFcXV2zYJ5YJBh-bng",
+            authDomain: "auditorias-giga.firebaseapp.com",
+            projectId: "auditorias-giga",
+            storageBucket: "auditorias-giga.firebasestorage.app",
+            messagingSenderId: "754672057943",
+            appId: "1:754672057943:web:c06d9eeae758e8377d2d12"
+        };
+        
+        // Inicializa o Firebase e o Firestore
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
         const auditData = {
             1: {
@@ -471,8 +483,7 @@
                 delete tempPayload.id; 
 
                 try {
-                    const { error } = await supabaseClient.from('auditorias_giga').insert([tempPayload]);
-                    if (error) throw error;
+                    await db.collection('auditorias_giga').add(tempPayload);
                     syncedCount++;
                 } catch (e) {
                     remaining.push(audit);
@@ -485,7 +496,7 @@
                 if (!document.getElementById('tab-dashboard').classList.contains('hidden')) {
                     renderDashboard(); 
                 }
-                alert(`${syncedCount} auditoria(s) salva(s) offline foram sincronizada(s) com a nuvem!`);
+                alert(`${syncedCount} auditoria(s) salva(s) offline foram sincronizada(s) com a nuvem do Firebase!`);
             }
         }
 
@@ -716,7 +727,8 @@
                 total_pontos: total,
                 rendimento: calculatedYield,
                 respostas: items,
-                pontuacoes_categoria: catScores
+                pontuacoes_categoria: catScores,
+                timestamp: Date.now() 
             };
 
             const saveOffline = () => {
@@ -724,7 +736,7 @@
                 payload.id = 'offline_' + Date.now();
                 offlineList.push(payload);
                 localStorage.setItem('giga_offline_audits', JSON.stringify(offlineList));
-                alert("Não foi possível conectar ao banco de dados no momento (sem internet ou servidor inativo). A auditoria foi salva no modo OFFLINE no dispositivo e será enviada automaticamente quando a conexão for restabelecida.");
+                alert("Não foi possível conectar ao banco de dados no momento (sem internet ou rede bloqueada). A auditoria foi salva no modo OFFLINE no dispositivo e será enviada automaticamente quando a conexão for restabelecida.");
                 cancelEdit();
                 switchTab('dashboard');
             };
@@ -744,26 +756,23 @@
                         switchTab('dashboard');
                     } else {
                         if (!navigator.onLine) throw new Error('OFFLINE_EDIT_ERROR');
-                        const { error } = await supabaseClient.from('auditorias_giga').update(payload).eq('id', editId);
-                        if (error) throw error;
-                        alert("Auditoria atualizada com sucesso na nuvem!");
+                        await db.collection('auditorias_giga').doc(editId).update(payload);
+                        alert("Auditoria atualizada com sucesso na nuvem Firebase!");
                         cancelEdit();
                         switchTab('dashboard');
                     }
                 } else {
                     if (!navigator.onLine) throw new Error('OFFLINE'); 
-                    const { error } = await supabaseClient.from('auditorias_giga').insert([payload]);
-                    if (error) throw error;
-                    alert("Auditoria salva com sucesso no banco de dados!");
+                    await db.collection('auditorias_giga').add(payload);
+                    alert("Auditoria salva com sucesso no banco de dados Firebase!");
                     cancelEdit();
                     switchTab('dashboard');
                 }
             } catch (err) {
                 if (!editId) {
-                    // Novo comportamento: Ativa salvamento offline para QUALQUER erro ao tentar salvar pela primeira vez
                     saveOffline(); 
                 } else {
-                    alert("Não foi possível atualizar a auditoria na nuvem no momento. Servidor indisponível ou sem internet. Tente novamente mais tarde.\\nDetalhe: " + err.message);
+                    alert("Não foi possível atualizar a auditoria na nuvem no momento. Servidor bloqueado ou sem internet. Tente novamente mais tarde.\\nDetalhe: " + err.message);
                     document.getElementById("btn-save-text").innerText = "Atualizar Auditoria";
                 }
             }
@@ -819,26 +828,32 @@
         async function renderDashboard() {
             const filter = document.getElementById("dash-filter-line").value;
             const tbody = document.getElementById("audit-table-body");
-            tbody.innerHTML = "<tr><td colspan='8' class='text-center p-4 text-slate-400'>A processar dados...</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='8' class='text-center p-4 text-slate-400'>A processar dados do Firebase...</td></tr>";
 
             // 1. Busca os pendentes offline locais
             let offlineList = JSON.parse(localStorage.getItem('giga_offline_audits') || '[]');
             offlineList = offlineList.filter(a => a.passo === currentPass);
             if (filter !== "ALL") offlineList = offlineList.filter(a => a.linha === filter);
 
-            // 2. Busca os da nuvem
+            // 2. Busca os da nuvem (Firebase)
             let cloudList = [];
             if (navigator.onLine) {
-                let query = supabaseClient
-                    .from('auditorias_giga')
-                    .select('*')
-                    .eq('passo', currentPass)
-                    .order('id', { ascending: false });
+                try {
+                    let queryRef = db.collection('auditorias_giga').where('passo', '==', currentPass);
+                    if (filter !== "ALL") {
+                        queryRef = queryRef.where('linha', '==', filter);
+                    }
+                    
+                    const snapshot = await queryRef.get();
+                    cloudList = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
 
-                if (filter !== "ALL") query = query.eq('linha', filter);
-                
-                const { data, error } = await query;
-                if (!error && data) cloudList = data;
+                    cloudList.sort((a, b) => b.timestamp - a.timestamp);
+                } catch (error) {
+                    console.error("Erro ao buscar no Firebase:", error);
+                }
             }
 
             // 3. Junta as duas listas
@@ -1012,11 +1027,11 @@
                     localStorage.setItem('giga_offline_audits', JSON.stringify(offlineList));
                     renderDashboard();
                 } else {
-                    const { error } = await supabaseClient.from('auditorias_giga').delete().eq('id', id);
-                    if (error) {
-                        alert("Erro ao excluir do banco de dados: " + error.message);
-                    } else {
+                    try {
+                        await db.collection('auditorias_giga').doc(id).delete();
                         renderDashboard();
+                    } catch (error) {
+                        alert("Erro ao excluir do banco de dados: " + error.message);
                     }
                 }
             }
